@@ -1,0 +1,31 @@
+export interface NormalisedLead {
+  id: number;
+  externalId: string | null;
+  companyName: string | null;
+  contactName: string | null;
+  email: string | null;
+  phone: string | null;
+  cpf: string | null;
+  sourceChannel: string;
+  formName: string | null;
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  cep: string | null;
+  street: string | null;
+  addrNumber: string | null;
+  neighborhood: string | null;
+  city: string | null;
+  state: string | null;
+  birthDate: string | null;
+  products: string | null;
+  extraContext: string | null;
+  status: string | null;
+  opportunityNumber: string | null;
+  opportunityName: string | null;
+  opportunityTag: string | null;
+  opportunityStage: string | null;
+  createdDate: string | Date;
+  updatedDate: string | Date | null;
+  importedAt: Date;
+}

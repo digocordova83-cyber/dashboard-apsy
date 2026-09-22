@@ -1,0 +1,7 @@
+# Operational notes are useful inside Manus but are not part of the migration package.
+NOTES.md export-ignore
+todo.md export-ignore
+.manus-logs/** export-ignore
+client/public/__manus__/** export-ignore
+scripts/__pycache__/** export-ignore
+.project-config.json export-ignore
