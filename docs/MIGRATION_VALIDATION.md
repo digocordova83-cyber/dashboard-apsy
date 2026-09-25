@@ -4,6 +4,8 @@
 
 A carga de corte foi executada em **21/09/2026 às 17:30 BRT**. O snapshot persistido e a auditoria independente produziram os totais abaixo.
 
+> Esta tabela preserva a classificação usada no corte técnico de 21/09. Em 25/09/2026, o dashboard passou a usar a taxonomia comercial única documentada em `DATA_DICTIONARY.md`; os números atuais não devem ser comparados etapa a etapa com MQL/SAL/SQL.
+
 | Indicador | Total |
 |---|---:|
 | Leads brutos da API | 7.221 |
@@ -41,6 +43,24 @@ A redução de matrículas para 17 não foi tratada como perda de dados silencio
 ## Critérios para aceitar uma nova migração
 
 Uma migração futura deve produzir um relatório equivalente e explicar qualquer variação material. Nunca compare apenas o total bruto: compare período, etapas, inscrições não conciliadas, UTMs e regra de oportunidade válida.
+
+## Reclassificação para a taxonomia comercial — 25/09/2026
+
+A carga D-1 foi executada até **24/09/2026** com a definição única de etapas. O banco ficou com 7.360 registros e 7.360 IDs externos distintos.
+
+| Etapa | Total |
+|---|---:|
+| Não Localizado | 4.182 |
+| Em Atendimento | 2.650 |
+| Qualificado | 206 |
+| Fechamento | 0 |
+| Matriculado | 17 |
+| Recusa | 0 |
+| Desqualificado | 0 |
+| Encaminhado p/ Graduação | 304 |
+| Fora da Base | 1 |
+
+Os zeros em Fechamento, Recusa e Desqualificado refletem a ausência dessas tabulações no histórico retornado pelo CRM no momento da carga; não devem ser interpretados automaticamente como ausência operacional. A classificação será preenchida conforme o EducaCRM passar a registrar os novos códigos.
 
 ## Evidências locais
 

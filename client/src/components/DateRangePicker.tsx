@@ -1,42 +1,100 @@
 import { Button } from "@/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { CalendarDays } from "lucide-react";
 import { useState } from "react";
 
 export type DateRange = { dateFrom: string; dateTo: string; label: string };
 
-function iso(d: Date): string {
-  return d.toISOString().slice(0, 10);
+function brtTodayIso(now = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
 }
 
-export function presetRanges(): DateRange[] {
-  const today = new Date();
-  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1);
-  const d7 = new Date(today); d7.setDate(today.getDate() - 7);
-  const d14 = new Date(today); d14.setDate(today.getDate() - 14);
-  const d30 = new Date(today); d30.setDate(today.getDate() - 30);
-  const d90 = new Date(today); d90.setDate(today.getDate() - 90);
-  const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-  const prevMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-  const prevMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
-  return [
-    { label: "Últimos 7 dias", dateFrom: iso(d7), dateTo: iso(yesterday) },
-    { label: "Últimos 14 dias", dateFrom: iso(d14), dateTo: iso(yesterday) },
-    { label: "Últimos 30 dias", dateFrom: iso(d30), dateTo: iso(yesterday) },
-    { label: "Últimos 90 dias", dateFrom: iso(d90), dateTo: iso(yesterday) },
-    { label: "Este mês", dateFrom: iso(monthStart), dateTo: iso(yesterday < monthStart ? monthStart : yesterday) },
-    { label: "Mês passado", dateFrom: iso(prevMonthStart), dateTo: iso(prevMonthEnd) },
-    { label: "Junho/2026", dateFrom: "2026-06-01", dateTo: "2026-06-30" },
+function shiftIso(isoDate: string, days: number): string {
+  const date = new Date(`${isoDate}T12:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function monthStart(isoDate: string): string {
+  return `${isoDate.slice(0, 7)}-01`;
+}
+
+function previousMonth(isoDate: string): { start: string; end: string } {
+  const [year, month] = isoDate.split("-").map(Number);
+  const startDate = new Date(Date.UTC(year, month - 2, 1, 12));
+  const endDate = new Date(Date.UTC(year, month - 1, 0, 12));
+  return {
+    start: startDate.toISOString().slice(0, 10),
+    end: endDate.toISOString().slice(0, 10),
+  };
+}
+
+export function presetRanges(now = new Date()): DateRange[] {
+  const today = brtTodayIso(now);
+  const yesterday = shiftIso(today, -1);
+  const previous = previousMonth(today);
+  const ranges: DateRange[] = [
+    {
+      label: "Últimos 7 dias",
+      dateFrom: shiftIso(yesterday, -6),
+      dateTo: yesterday,
+    },
+    {
+      label: "Últimos 14 dias",
+      dateFrom: shiftIso(yesterday, -13),
+      dateTo: yesterday,
+    },
+    {
+      label: "Últimos 30 dias",
+      dateFrom: shiftIso(yesterday, -29),
+      dateTo: yesterday,
+    },
+    {
+      label: "Últimos 90 dias",
+      dateFrom: shiftIso(yesterday, -89),
+      dateTo: yesterday,
+    },
   ];
+  if (yesterday >= monthStart(today)) {
+    ranges.push({
+      label: "Este mês",
+      dateFrom: monthStart(today),
+      dateTo: yesterday,
+    });
+  }
+  ranges.push(
+    { label: "Mês passado", dateFrom: previous.start, dateTo: previous.end },
+    { label: "Junho/2026", dateFrom: "2026-06-01", dateTo: "2026-06-30" }
+  );
+  return ranges;
 }
 
-/** Range padrão do dashboard: mês atual, do dia 01 até ontem (dados completos). */
+/** Range padrão do dashboard: mês atual, do dia 01 até ontem em Brasília. */
 export function defaultRange(): DateRange {
   const presets = presetRanges();
-  return presets.find(p => p.label === "Este mês") ?? presets[2];
+  return (
+    presets.find(item => item.label === "Este mês") ??
+    presets.find(item => item.label === "Mês passado") ??
+    presets[2]
+  );
 }
 
-export function DateRangePicker({ value, onChange }: { value: DateRange; onChange: (r: DateRange) => void }) {
+export function DateRangePicker({
+  value,
+  onChange,
+}: {
+  value: DateRange;
+  onChange: (range: DateRange) => void;
+}) {
   const [open, setOpen] = useState(false);
   const presets = presetRanges();
   return (
@@ -45,17 +103,22 @@ export function DateRangePicker({ value, onChange }: { value: DateRange; onChang
         <Button variant="outline" size="sm" className="gap-2 border-border/70">
           <CalendarDays className="h-4 w-4 text-primary" />
           <span className="hidden sm:inline">{value.label}</span>
-          <span className="text-xs text-muted-foreground">{value.dateFrom.slice(5)} → {value.dateTo.slice(5)}</span>
+          <span className="text-xs text-muted-foreground">
+            {value.dateFrom.slice(5)} → {value.dateTo.slice(5)}
+          </span>
         </Button>
       </PopoverTrigger>
       <PopoverContent align="end" className="w-52 p-1">
-        {presets.map(p => (
+        {presets.map(preset => (
           <button
-            key={p.label}
-            className={`w-full rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-accent ${p.label === value.label ? "bg-primary/10 text-primary font-medium" : ""}`}
-            onClick={() => { onChange(p); setOpen(false); }}
+            key={preset.label}
+            className={`w-full rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-accent ${preset.label === value.label ? "bg-primary/10 text-primary font-medium" : ""}`}
+            onClick={() => {
+              onChange(preset);
+              setOpen(false);
+            }}
           >
-            {p.label}
+            {preset.label}
           </button>
         ))}
       </PopoverContent>

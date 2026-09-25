@@ -22,7 +22,8 @@
     "admin:create": "tsx scripts/create_admin.ts",
     "seed:programmatic": "node scripts/seed.mjs",
     "crm:sync": "tsx scripts/sync_educacrm_to_db.ts",
-    "crm:audit": "tsx scripts/audit_educacrm.ts"
+    "crm:audit": "tsx scripts/audit_educacrm.ts",
+    "crm:reclassify": "tsx scripts/reclassify_crm_funnel.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",

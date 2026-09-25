@@ -1,9 +1,14 @@
 import { ENV } from "./_core/env";
 import type { NormalisedLead } from "./crmTypes";
+import {
+  crmStageFromTabulations,
+  type CrmFunnelStage,
+} from "../shared/crmFunnel";
 
 const PAGE_SIZE = 500;
-const PAGE_CONCURRENCY = 4;
+const PAGE_CONCURRENCY = 2;
 const CACHE_TTL_MS = 10 * 60 * 1000;
+const FETCH_ATTEMPTS = 6;
 
 interface PaginatedResponse<T> {
   count: number;
@@ -130,35 +135,60 @@ function assertConfigured() {
   if (!ENV.crmEducaToken) throw new Error("CRM_EDUCACRM_TOKEN não configurado");
 }
 
-async function fetchPage<T>(path: string, limit: number, offset: number): Promise<PaginatedResponse<T>> {
+async function fetchPage<T>(
+  path: string,
+  limit: number,
+  offset: number
+): Promise<PaginatedResponse<T>> {
   assertConfigured();
-  const url = new URL(`${ENV.crmEducaApiUrl.replace(/\/$/, "")}/${path.replace(/^\//, "")}`);
+  const url = new URL(
+    `${ENV.crmEducaApiUrl.replace(/\/$/, "")}/${path.replace(/^\//, "")}`
+  );
   url.searchParams.set("limit", String(limit));
   url.searchParams.set("offset", String(offset));
 
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `Token ${ENV.crmEducaToken}`,
-      Accept: "application/json",
-    },
-    signal: AbortSignal.timeout(60_000),
-  });
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`EducaCRM ${path} retornou ${response.status}: ${body.slice(0, 300)}`);
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= FETCH_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Token ${ENV.crmEducaToken}`,
+          Accept: "application/json",
+        },
+        signal: AbortSignal.timeout(90_000),
+      });
+      if (!response.ok) {
+        const body = await response.text();
+        throw new Error(
+          `EducaCRM ${path} retornou ${response.status}: ${body.slice(0, 300)}`
+        );
+      }
+      return (await response.json()) as PaginatedResponse<T>;
+    } catch (error) {
+      lastError = error;
+      if (attempt === FETCH_ATTEMPTS) break;
+      await new Promise(resolve =>
+        setTimeout(resolve, Math.min(8_000, 750 * 2 ** (attempt - 1)))
+      );
+    }
   }
-  return response.json() as Promise<PaginatedResponse<T>>;
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(`Falha ao consultar EducaCRM ${path}`);
 }
 
 async function listAll<T>(path: string): Promise<T[]> {
   const first = await fetchPage<T>(path, PAGE_SIZE, 0);
   const rows = [...first.results];
   const offsets: number[] = [];
-  for (let offset = PAGE_SIZE; offset < first.count; offset += PAGE_SIZE) offsets.push(offset);
+  for (let offset = PAGE_SIZE; offset < first.count; offset += PAGE_SIZE)
+    offsets.push(offset);
 
   for (let i = 0; i < offsets.length; i += PAGE_CONCURRENCY) {
     const batch = offsets.slice(i, i + PAGE_CONCURRENCY);
-    const pages = await Promise.all(batch.map((offset) => fetchPage<T>(path, PAGE_SIZE, offset)));
+    const pages = await Promise.all(
+      batch.map(offset => fetchPage<T>(path, PAGE_SIZE, offset))
+    );
     for (const page of pages) rows.push(...page.results);
   }
   return rows;
@@ -166,20 +196,35 @@ async function listAll<T>(path: string): Promise<T[]> {
 
 let snapshotCache: { value: EducaCrmSnapshot; ts: number } | null = null;
 
-export async function fetchEducaCrmSnapshot(forceRefresh = false): Promise<EducaCrmSnapshot> {
-  if (!forceRefresh && snapshotCache && Date.now() - snapshotCache.ts < CACHE_TTL_MS) {
+export async function fetchEducaCrmSnapshot(
+  forceRefresh = false
+): Promise<EducaCrmSnapshot> {
+  if (
+    !forceRefresh &&
+    snapshotCache &&
+    Date.now() - snapshotCache.ts < CACHE_TTL_MS
+  ) {
     return snapshotCache.value;
   }
 
-  const [leads, contacts, enrollments, courses, situations] = await Promise.all([
-    listAll<EducaCrmLead>("captacao/leads/"),
-    listAll<EducaCrmContact>("captacao/contatos/"),
-    listAll<EducaCrmEnrollment>("ingresso/inscritos/"),
-    listAll<EducaCrmCourse>("estrutura/cursos/"),
-    listAll<EducaCrmSituation>("captacao/situacoes/"),
-  ]);
+  const [leads, contacts, enrollments, courses, situations] = await Promise.all(
+    [
+      listAll<EducaCrmLead>("captacao/leads/"),
+      listAll<EducaCrmContact>("captacao/contatos/"),
+      listAll<EducaCrmEnrollment>("ingresso/inscritos/"),
+      listAll<EducaCrmCourse>("estrutura/cursos/"),
+      listAll<EducaCrmSituation>("captacao/situacoes/"),
+    ]
+  );
 
-  const value = { leads, contacts, enrollments, courses, situations, fetchedAt: new Date() };
+  const value = {
+    leads,
+    contacts,
+    enrollments,
+    courses,
+    situations,
+    fetchedAt: new Date(),
+  };
   snapshotCache = { value, ts: Date.now() };
   return value;
 }
@@ -190,7 +235,8 @@ function textValue(value: unknown): string | null {
   if (value && typeof value === "object") {
     const record = value as Record<string, unknown>;
     for (const key of ["value", "nome", "name", "codigo", "description"]) {
-      if (typeof record[key] === "string" && record[key].trim()) return record[key].trim();
+      if (typeof record[key] === "string" && record[key].trim())
+        return record[key].trim();
     }
   }
   return null;
@@ -205,7 +251,9 @@ function firstText(values: unknown[] | null | undefined): string | null {
 }
 
 function joinText(values: unknown[] | null | undefined): string | null {
-  const texts = (values ?? []).map(textValue).filter((value): value is string => !!value);
+  const texts = (values ?? [])
+    .map(textValue)
+    .filter((value): value is string => !!value);
   return texts.length ? Array.from(new Set(texts)).join(", ") : null;
 }
 
@@ -236,73 +284,148 @@ function sourceChannel(
   utmSource: string | null,
   action: string | null,
   tags: string | null,
-  referer: unknown[] | string | null,
+  referer: unknown[] | string | null
 ): string {
   const source = utmSource?.toLowerCase() ?? "";
-  const context = `${action ?? ""} ${tags ?? ""} ${typeof referer === "string" ? referer : joinText(referer) ?? ""}`.toLowerCase();
-  if (source.includes("facebook") || source.includes("instagram") || source.includes("meta") || source === "fb" || source === "ig") return "meta";
-  if (source.includes("google") || source.includes("adwords") || source.includes("gads")) return "google";
-  if (source.includes("whatsapp") || context.includes("whatsapp") || context.includes("contato-omni")) return "whatsapp";
+  const context =
+    `${action ?? ""} ${tags ?? ""} ${typeof referer === "string" ? referer : (joinText(referer) ?? "")}`.toLowerCase();
+  if (
+    source.includes("facebook") ||
+    source.includes("instagram") ||
+    source.includes("meta") ||
+    source === "fb" ||
+    source === "ig"
+  )
+    return "meta";
+  if (
+    source.includes("google") ||
+    source.includes("adwords") ||
+    source.includes("gads")
+  )
+    return "google";
+  if (
+    source.includes("whatsapp") ||
+    context.includes("whatsapp") ||
+    context.includes("contato-omni")
+  )
+    return "whatsapp";
   if (utmSource) return utmSource;
-  if (context.includes("preins") || context.includes("lead") || context.includes("form")) return "formulario_site";
+  if (
+    context.includes("preins") ||
+    context.includes("lead") ||
+    context.includes("form")
+  )
+    return "formulario_site";
   if (context.includes("hubspot")) return "importacao_historica";
   return "desconhecido";
 }
 
 function isActiveEnrollment(enrollment: EducaCrmEnrollment) {
   if (enrollment.data_cancel_matricula) return false;
-  return enrollment.etapa === "matriculado"
-    || !!enrollment.data_efetiv_matricula
-    || !!enrollment.matricula_academica;
+  return (
+    enrollment.etapa === "matriculado" ||
+    !!enrollment.data_efetiv_matricula ||
+    !!enrollment.matricula_academica
+  );
 }
 
 function enrollmentRank(enrollment: EducaCrmEnrollment) {
   if (isActiveEnrollment(enrollment)) return 4;
-  if (["pre-matriculado", "oferta-base", "inscrito-pago", "aprovado", "nota-reaproveitada"].includes(enrollment.etapa)) return 3;
+  if (
+    [
+      "pre-matriculado",
+      "oferta-base",
+      "inscrito-pago",
+      "aprovado",
+      "nota-reaproveitada",
+    ].includes(enrollment.etapa)
+  )
+    return 3;
   return 2;
+}
+
+function fallbackStageFromEnrollment(
+  enrollment: EducaCrmEnrollment | undefined
+): CrmFunnelStage | null {
+  if (!enrollment) return null;
+  if (isActiveEnrollment(enrollment)) return "MATRICULADO";
+  if (["pre-matriculado", "inscrito-pago"].includes(enrollment.etapa))
+    return "FECHAMENTO";
+  if (
+    ["oferta-base", "aprovado", "nota-reaproveitada"].includes(enrollment.etapa)
+  )
+    return "QUALIFICADO";
+  return null;
 }
 
 function enrollmentCandidates(
   enrollment: EducaCrmEnrollment,
   emailIndex: Map<string, EducaCrmLead[]>,
   phoneIndex: Map<string, EducaCrmLead[]>,
-  cpfIndex: Map<string, EducaCrmLead[]>,
+  cpfIndex: Map<string, EducaCrmLead[]>
 ) {
   const found = new Map<number, EducaCrmLead>();
   const email = normalizeEmail(enrollment.email);
   const phone = normalizeDigits(enrollment.celular ?? enrollment.telefone);
   const cpf = normalizeDigits(enrollment.cpf);
-  for (const candidate of email ? emailIndex.get(email) ?? [] : []) found.set(candidate.id, candidate);
-  for (const candidate of phone ? phoneIndex.get(phone) ?? [] : []) found.set(candidate.id, candidate);
-  for (const candidate of cpf ? cpfIndex.get(cpf) ?? [] : []) found.set(candidate.id, candidate);
+  for (const candidate of email ? (emailIndex.get(email) ?? []) : [])
+    found.set(candidate.id, candidate);
+  for (const candidate of phone ? (phoneIndex.get(phone) ?? []) : [])
+    found.set(candidate.id, candidate);
+  for (const candidate of cpf ? (cpfIndex.get(cpf) ?? []) : [])
+    found.set(candidate.id, candidate);
   return Array.from(found.values());
 }
 
-export function mapEducaCrmSnapshot(snapshot: EducaCrmSnapshot): NormalisedLead[] {
-  const contactsById = new Map(snapshot.contacts.map((contact) => [contact.id, contact]));
-  const courseByCode = new Map(snapshot.courses.map((course) => [course.codigo, course.nome]));
-  const situationByCode = new Map(snapshot.situations.map((situation) => [situation.codigo, situation]));
+export function mapEducaCrmSnapshot(
+  snapshot: EducaCrmSnapshot
+): NormalisedLead[] {
+  const contactsById = new Map(
+    snapshot.contacts.map(contact => [contact.id, contact])
+  );
+  const courseByCode = new Map(
+    snapshot.courses.map(course => [course.codigo, course.nome])
+  );
+  const situationByCode = new Map(
+    snapshot.situations.map(situation => [situation.codigo, situation])
+  );
 
   const emailIndex = new Map<string, EducaCrmLead[]>();
   const phoneIndex = new Map<string, EducaCrmLead[]>();
   const cpfIndex = new Map<string, EducaCrmLead[]>();
-  const addIndex = (index: Map<string, EducaCrmLead[]>, key: string | null, lead: EducaCrmLead) => {
+  const addIndex = (
+    index: Map<string, EducaCrmLead[]>,
+    key: string | null,
+    lead: EducaCrmLead
+  ) => {
     if (!key) return;
     index.set(key, [...(index.get(key) ?? []), lead]);
   };
   for (const lead of snapshot.leads) {
     const contact = lead.contato ? contactsById.get(lead.contato) : undefined;
     addIndex(emailIndex, normalizeEmail(lead.email ?? contact?.email), lead);
-    addIndex(phoneIndex, normalizeDigits(lead.celular ?? lead.telefone ?? contact?.celular ?? contact?.telefone), lead);
+    addIndex(
+      phoneIndex,
+      normalizeDigits(
+        lead.celular ?? lead.telefone ?? contact?.celular ?? contact?.telefone
+      ),
+      lead
+    );
     addIndex(cpfIndex, normalizeDigits(lead.cpf ?? contact?.cpf), lead);
   }
 
   const enrollmentByLeadId = new Map<number, EducaCrmEnrollment>();
   const unmatchedEnrollments: EducaCrmEnrollment[] = [];
-  const orderedEnrollments = [...snapshot.enrollments].sort((a, b) => enrollmentRank(b) - enrollmentRank(a));
+  const orderedEnrollments = [...snapshot.enrollments].sort(
+    (a, b) => enrollmentRank(b) - enrollmentRank(a)
+  );
   for (const enrollment of orderedEnrollments) {
-    const candidates = enrollmentCandidates(enrollment, emailIndex, phoneIndex, cpfIndex)
-      .filter((candidate) => !enrollmentByLeadId.has(candidate.id));
+    const candidates = enrollmentCandidates(
+      enrollment,
+      emailIndex,
+      phoneIndex,
+      cpfIndex
+    ).filter(candidate => !enrollmentByLeadId.has(candidate.id));
     const createdAt = enrollment.data_criacao ?? "9999";
     const sorted = candidates.sort((a, b) => {
       const courseA = a.curso === enrollment.curso ? 1 : 0;
@@ -326,25 +449,56 @@ export function mapEducaCrmSnapshot(snapshot: EducaCrmSnapshot): NormalisedLead[
   const mapped: NormalisedLead[] = snapshot.leads.map((lead, index) => {
     const contact = lead.contato ? contactsById.get(lead.contato) : undefined;
     const enrollment = enrollmentByLeadId.get(lead.id);
-    const tags = joinText(lead.tags) ?? contact?.str_tags ?? joinText(contact?.tags);
-    const utmSource = firstText(lead.utm_sources) ?? firstText(contact?.utm_sources) ?? firstText(enrollment?.utm_sources);
-    const utmMedium = firstText(lead.utm_mediums) ?? firstText(contact?.utm_mediums) ?? firstText(enrollment?.utm_mediums);
-    const utmCampaign = firstText(lead.utm_campaigns) ?? firstText(contact?.utm_campaigns) ?? firstText(enrollment?.utm_campaigns);
+    const tags =
+      joinText(lead.tags) ?? contact?.str_tags ?? joinText(contact?.tags);
+    const utmSource =
+      firstText(lead.utm_sources) ??
+      firstText(contact?.utm_sources) ??
+      firstText(enrollment?.utm_sources);
+    const utmMedium =
+      firstText(lead.utm_mediums) ??
+      firstText(contact?.utm_mediums) ??
+      firstText(enrollment?.utm_mediums);
+    const utmCampaign =
+      firstText(lead.utm_campaigns) ??
+      firstText(contact?.utm_campaigns) ??
+      firstText(enrollment?.utm_campaigns);
     const action = lead.acao ?? contact?.acao ?? null;
-    const isTest = tags?.toLowerCase().split(/\s*,\s*/).includes("teste") ?? false;
-    const contacted = !!contact?.data_ultima_atividade_omni || !!contact?.data_ultimo_hsm || action === "contato-omni";
-    const stage = isTest
-      ? "OUTROS"
-      : enrollment
-        ? (isActiveEnrollment(enrollment) ? "MATRICULADO" : "SQL")
-        : contacted
-          ? "SAL"
-          : "MQL";
-    const situation = lead.situacao ? situationByCode.get(lead.situacao) : undefined;
-    const cancelled = !!enrollment?.data_cancel_matricula || enrollment?.etapa === "cancelado";
-    const courseCode = enrollment?.curso ?? lead.curso ?? contact?.curso ?? null;
-    const courseName = courseCode ? courseByCode.get(courseCode) ?? courseCode : null;
-    const createdDate = isoDateBrt(lead.data_criacao_original ?? lead.data_criacao) ?? "1970-01-01";
+    const contacted =
+      !!contact?.data_ultima_atividade_omni ||
+      !!contact?.data_ultimo_hsm ||
+      action === "contato-omni";
+    const situation = lead.situacao
+      ? situationByCode.get(lead.situacao)
+      : undefined;
+    const tabulation =
+      lead.situacao ??
+      situation?.codigo ??
+      enrollment?.etapa ??
+      tags ??
+      action ??
+      (contacted ? "contato-omni" : null);
+    const stage =
+      crmStageFromTabulations([
+        lead.situacao,
+        situation?.codigo,
+        enrollment?.etapa,
+        tags,
+        action,
+        contacted ? "contato-omni" : null,
+      ]) ??
+      fallbackStageFromEnrollment(enrollment) ??
+      "NAO_LOCALIZADO";
+    const cancelled =
+      !!enrollment?.data_cancel_matricula || enrollment?.etapa === "cancelado";
+    const courseCode =
+      enrollment?.curso ?? lead.curso ?? contact?.curso ?? null;
+    const courseName = courseCode
+      ? (courseByCode.get(courseCode) ?? courseCode)
+      : null;
+    const createdDate =
+      isoDateBrt(lead.data_criacao_original ?? lead.data_criacao) ??
+      "1970-01-01";
 
     return {
       id: index + 1,
@@ -352,7 +506,14 @@ export function mapEducaCrmSnapshot(snapshot: EducaCrmSnapshot): NormalisedLead[
       companyName: null,
       contactName: lead.nome || contact?.nome || enrollment?.nome || null,
       email: lead.email ?? contact?.email ?? enrollment?.email ?? null,
-      phone: lead.celular ?? lead.telefone ?? contact?.celular ?? contact?.telefone ?? enrollment?.celular ?? enrollment?.telefone ?? null,
+      phone:
+        lead.celular ??
+        lead.telefone ??
+        contact?.celular ??
+        contact?.telefone ??
+        enrollment?.celular ??
+        enrollment?.telefone ??
+        null,
       cpf: lead.cpf ?? contact?.cpf ?? enrollment?.cpf ?? null,
       sourceChannel: sourceChannel(utmSource, action, tags, lead.referer),
       formName: action,
@@ -367,21 +528,47 @@ export function mapEducaCrmSnapshot(snapshot: EducaCrmSnapshot): NormalisedLead[
       state: enrollment?.estado ?? contact?.estado ?? null,
       birthDate: enrollment?.data_nascimento ?? null,
       products: courseName,
-      extraContext: [lead.tipo ?? contact?.tipo, lead.modalidade ?? contact?.modalidade, lead.unidade ?? contact?.unidade].filter(Boolean).join(" · ") || null,
-      status: stage === "MATRICULADO" ? "ganho" : cancelled || situation?.decisao === "nao_contactar" ? "perdido" : "aberto",
+      extraContext:
+        [
+          lead.tipo ?? contact?.tipo,
+          lead.modalidade ?? contact?.modalidade,
+          lead.unidade ?? contact?.unidade,
+        ]
+          .filter(Boolean)
+          .join(" · ") || null,
+      status:
+        stage === "MATRICULADO"
+          ? "ganho"
+          : ["RECUSA", "DESQUALIFICADO", "FORA_DA_BASE"].includes(stage) ||
+              cancelled ||
+              situation?.decisao === "nao_contactar"
+            ? "perdido"
+            : stage === "ENCAMINHADO_GRADUACAO"
+              ? "encaminhado"
+              : "aberto",
       opportunityNumber: String(lead.id),
       opportunityName: courseName ? `${courseName} — ${lead.nome}` : lead.nome,
-      opportunityTag: enrollment?.etapa ?? lead.situacao ?? tags,
+      opportunityTag: tabulation,
       opportunityStage: stage,
       createdDate,
-      updatedDate: isoDateBrt(lead.data_atualizacao) ?? isoDateBrt(enrollment?.data_efetiv_matricula ?? enrollment?.data_criacao),
+      updatedDate:
+        isoDateBrt(lead.data_atualizacao) ??
+        isoDateBrt(
+          enrollment?.data_efetiv_matricula ?? enrollment?.data_criacao
+        ),
       importedAt: snapshot.fetchedAt,
     };
   });
 
   for (const enrollment of unmatchedEnrollments) {
-    const courseName = enrollment.curso ? courseByCode.get(enrollment.curso) ?? enrollment.curso : null;
+    const courseName = enrollment.curso
+      ? (courseByCode.get(enrollment.curso) ?? enrollment.curso)
+      : null;
     const matriculated = isActiveEnrollment(enrollment);
+    const stage =
+      crmStageFromTabulations([enrollment.etapa, joinText(enrollment.tags)]) ??
+      fallbackStageFromEnrollment(enrollment) ??
+      "NAO_LOCALIZADO";
     mapped.push({
       id: mapped.length + 1,
       externalId: `educacrm-inscrito:${enrollment.codigo}`,
@@ -390,7 +577,12 @@ export function mapEducaCrmSnapshot(snapshot: EducaCrmSnapshot): NormalisedLead[
       email: enrollment.email || null,
       phone: enrollment.celular ?? enrollment.telefone,
       cpf: enrollment.cpf,
-      sourceChannel: sourceChannel(firstText(enrollment.utm_sources), null, joinText(enrollment.tags), null),
+      sourceChannel: sourceChannel(
+        firstText(enrollment.utm_sources),
+        null,
+        joinText(enrollment.tags),
+        null
+      ),
       formName: "inscricao",
       utmSource: firstText(enrollment.utm_sources),
       utmMedium: firstText(enrollment.utm_mediums),
@@ -403,14 +595,27 @@ export function mapEducaCrmSnapshot(snapshot: EducaCrmSnapshot): NormalisedLead[
       state: enrollment.estado,
       birthDate: enrollment.data_nascimento,
       products: courseName,
-      extraContext: [enrollment.tipo, enrollment.modalidade, enrollment.unidade].filter(Boolean).join(" · ") || null,
-      status: matriculated ? "ganho" : enrollment.data_cancel_matricula ? "perdido" : "aberto",
+      extraContext:
+        [enrollment.tipo, enrollment.modalidade, enrollment.unidade]
+          .filter(Boolean)
+          .join(" · ") || null,
+      status: matriculated
+        ? "ganho"
+        : enrollment.data_cancel_matricula
+          ? "perdido"
+          : "aberto",
       opportunityNumber: enrollment.codigo,
-      opportunityName: courseName ? `${courseName} — ${enrollment.nome}` : enrollment.nome,
+      opportunityName: courseName
+        ? `${courseName} — ${enrollment.nome}`
+        : enrollment.nome,
       opportunityTag: enrollment.etapa,
-      opportunityStage: matriculated ? "MATRICULADO" : "SQL",
+      opportunityStage: stage,
       createdDate: isoDateBrt(enrollment.data_criacao) ?? "1970-01-01",
-      updatedDate: isoDateBrt(enrollment.data_efetiv_matricula ?? enrollment.data_aprovacao ?? enrollment.data_criacao),
+      updatedDate: isoDateBrt(
+        enrollment.data_efetiv_matricula ??
+          enrollment.data_aprovacao ??
+          enrollment.data_criacao
+      ),
       importedAt: snapshot.fetchedAt,
     });
   }
@@ -418,9 +623,12 @@ export function mapEducaCrmSnapshot(snapshot: EducaCrmSnapshot): NormalisedLead[
   return mapped;
 }
 
-export async function getEducaCrmLeadsCached(from: string, to: string): Promise<NormalisedLead[]> {
+export async function getEducaCrmLeadsCached(
+  from: string,
+  to: string
+): Promise<NormalisedLead[]> {
   const snapshot = await fetchEducaCrmSnapshot();
-  return mapEducaCrmSnapshot(snapshot).filter((lead) => {
+  return mapEducaCrmSnapshot(snapshot).filter(lead => {
     const date = String(lead.createdDate).slice(0, 10);
     return date >= from && date <= to;
   });

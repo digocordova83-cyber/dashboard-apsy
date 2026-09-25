@@ -37,7 +37,7 @@ records = {}
 for row in crm.iter_rows(min_row=header_row + 1, values_only=True):
     opp = norm(row[index['Oportunidade (nº)']])
     stage = norm(row[index['Oportunidade (etapa)']]).upper()
-    if not opp or not stage or stage == 'OUTROS':
+    if not opp or not stage or stage == 'FORA_DA_BASE':
         continue
     records[opp] = {
         'stage': stage,
@@ -53,8 +53,8 @@ coverage = Counter()
 for rec in records.values():
     for bucket in (by_source[rec['source_channel']], by_utm[classify_utm(rec['utm_source'])]):
         bucket['oportunidades'] += 1
-        if rec['stage'] == 'SQL':
-            bucket['sqls'] += 1
+        if rec['stage'] == 'QUALIFICADO':
+            bucket['qualificados'] += 1
         if rec['stage'] == 'MATRICULADO':
             bucket['matriculados_crm'] += 1
     coverage['oportunidades'] += 1
@@ -62,10 +62,10 @@ for rec in records.values():
         coverage['oportunidades_com_utm_source'] += 1
     if rec['utm_campaign']:
         coverage['oportunidades_com_utm_campaign'] += 1
-    if rec['stage'] == 'SQL':
-        coverage['sqls'] += 1
+    if rec['stage'] == 'QUALIFICADO':
+        coverage['qualificados'] += 1
         if rec['utm_source']:
-            coverage['sqls_com_utm_source'] += 1
+            coverage['qualificados_com_utm_source'] += 1
     if rec['stage'] == 'MATRICULADO':
         coverage['matriculados_crm'] += 1
         if rec['utm_source']:

@@ -14,19 +14,23 @@ O EducaCRM fornece leads, contatos, inscritos, cursos e situações. O dashboard
 
 ## Funil normalizado
 
-O EducaCRM não entrega MQL, SAL e SQL como um único campo pronto. O dashboard aplica as regras abaixo na ordem apresentada.
+Todos os relatórios usam a mesma taxonomia comercial. O código canônico fica em `opportunityStage`; a tabulação original permanece em `opportunityTag`.
 
-| Etapa | Critério |
-|---|---|
-| `OUTROS` | Lead marcado explicitamente como teste |
-| `MATRICULADO` | Inscrição sem cancelamento e com etapa `matriculado`, data de efetivação ou matrícula acadêmica |
-| `SQL` | Lead conciliado a um registro em `ingresso/inscritos/`, sem critério de matrícula ativa |
-| `SAL` | Contato com última atividade Omni, último HSM ou ação `contato-omni` |
-| `MQL` | Lead captado sem os sinais acima |
+| Etapa | Definição | Tabulações oficiais | Próxima ação |
+|---|---|---|---|
+| `NAO_LOCALIZADO` | Comercial tentou contato e não teve resposta | `não_localizado` | Seguir cadência de tentativas |
+| `EM_ATENDIMENTO` | Lead respondeu e está em conversa; perfil ainda em avaliação | `em_atendimento`, `sem_interação-qualificação` | Qualificar curso, formação, momento e financeiro |
+| `QUALIFICADO` | Tem perfil e interesse real; negociação em andamento | `short_list`, `sem_interação-negociação` | Enviar proposta e conduzir negociação |
+| `FECHAMENTO` | Aceitou; falta contrato ou pagamento | `pendente-contrato`, `pendente-pagamento` | Cobrar contrato ou pagamento |
+| `MATRICULADO` | Conversão confirmada | `matriculado` | Passar para permanência |
+| `RECUSA` | Foi acionado e disse não | tabulações `recusa-*` acordadas | Registrar motivo; reativar somente se marcado |
+| `DESQUALIFICADO` | Não tem perfil para o curso | `bad_fit`, formação incompleta ou sem perfil financeiro | Não contactar |
+| `ENCAMINHADO_GRADUACAO` | Entrou pela pós, mas o interesse é graduação | `interesse_graduacao` | Mover para o funil de Graduação |
+| `FORA_DA_BASE` | Teste ou atendimento em outro canal | `atendimento_outro_canal`, `teste` | Nenhuma |
 
-> **Oportunidade válida:** qualquer linha com `opportunityStage` preenchida e diferente de `OUTROS`.
+> **Lead considerado nos indicadores:** qualquer etapa acima, exceto `FORA_DA_BASE`. O funil principal exibe apenas as cinco etapas numeradas; recusa, desqualificação e encaminhamento aparecem como saídas/direcionamentos.
 
-A regra é operacional e auditável. Ela não deve ser apresentada como um campo nativo do EducaCRM.
+Em 25/09/2026, o campo `situacao` veio vazio nos 7.370 leads retornados pela API. Para preservar o histórico, a integração também reconhece aliases documentados de tags, ações e etapas de inscrição. Quando nenhum sinal existe, o registro entra em `NAO_LOCALIZADO`. A taxonomia apresentada ao usuário permanece única.
 
 ## Conciliação
 

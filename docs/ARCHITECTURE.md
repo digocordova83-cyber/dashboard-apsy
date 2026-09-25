@@ -108,7 +108,7 @@ A rotina calcula D-1 em Brasília, baixa o snapshot integral do EducaCRM, aplica
 
 ## Limitações conhecidas
 
-A API atual do EducaCRM não oferece MQL, SAL e SQL prontos. Essas etapas são uma normalização documentada. A cobertura de UTM observada na migração inicial foi baixa e deve ser acompanhada. O total de matrículas deve seguir o endpoint de inscritos do EducaCRM, não a fotografia histórica do Cirqua.
+A API atual do EducaCRM ainda não preenche `situacao` no histórico. A aplicação classifica as tabulações pela taxonomia central em `shared/crmFunnel.ts` e aceita aliases documentados de tags, ações e etapas de inscrição até a migração completa dos códigos no CRM. A cobertura de UTM observada na migração inicial foi baixa e deve ser acompanhada. O total de matrículas deve seguir o endpoint de inscritos do EducaCRM, não a fotografia histórica do Cirqua.
 
 ## Referências
 

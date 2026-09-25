@@ -5,6 +5,7 @@ import { replaceCrmLeads } from "./db";
 import { getPublyaData } from "./routers/media";
 import { getCrmSyncWindow } from "./syncWindow";
 import { ENV } from "./_core/env";
+import { CRM_STAGE_ORDER } from "../shared/crmFunnel";
 
 async function isAuthorizedScheduler(req: Request) {
   const expected = ENV.scheduledSyncSecret;
@@ -38,16 +39,18 @@ export async function syncDataHandler(req: Request, res: Response) {
     try {
       const snapshot = await fetchEducaCrmSnapshot(true);
       const allNormalised = mapEducaCrmSnapshot(snapshot);
-      const normalised = allNormalised.filter((lead) => {
+      const normalised = allNormalised.filter(lead => {
         const createdDate = String(lead.createdDate).slice(0, 10);
         return createdDate >= fromStr && createdDate <= toStr;
       });
 
       if (snapshot.leads.length < 100 || normalised.length < 100) {
-        throw new Error(`Carga recusada por segurança: ${snapshot.leads.length} leads brutos e ${normalised.length} normalizados`);
+        throw new Error(
+          `Carga recusada por segurança: ${snapshot.leads.length} leads brutos e ${normalised.length} normalizados`
+        );
       }
 
-      const dbRows = normalised.map((lead) => ({
+      const dbRows = normalised.map(lead => ({
         externalId: lead.externalId,
         companyName: lead.companyName,
         contactName: lead.contactName,
@@ -73,13 +76,14 @@ export async function syncDataHandler(req: Request, res: Response) {
         opportunityName: lead.opportunityName,
         opportunityTag: lead.opportunityTag,
         opportunityStage: lead.opportunityStage,
-        createdDate: typeof lead.createdDate === "string"
-          ? new Date(`${lead.createdDate.slice(0, 10)}T00:00:00.000Z`)
-          : lead.createdDate,
+        createdDate:
+          typeof lead.createdDate === "string"
+            ? new Date(`${lead.createdDate.slice(0, 10)}T00:00:00.000Z`)
+            : lead.createdDate,
         updatedDate: lead.updatedDate
-          ? (typeof lead.updatedDate === "string"
+          ? typeof lead.updatedDate === "string"
             ? new Date(`${lead.updatedDate.slice(0, 10)}T00:00:00.000Z`)
-            : lead.updatedDate)
+            : lead.updatedDate
           : null,
       }));
 
@@ -90,7 +94,9 @@ export async function syncDataHandler(req: Request, res: Response) {
         return acc;
       }, {});
       results.leads = `OK — EducaCRM: ${snapshot.leads.length} leads, ${snapshot.contacts.length} contatos, ${snapshot.enrollments.length} inscritos; ${count} registros persistidos de ${fromStr} a ${toStr} (D-1 BRT)`;
-      results.funnel = `MQL ${byStage.MQL ?? 0} · SAL ${byStage.SAL ?? 0} · SQL ${byStage.SQL ?? 0} · MATRICULADO ${byStage.MATRICULADO ?? 0} · OUTROS ${byStage.OUTROS ?? 0}`;
+      results.funnel = CRM_STAGE_ORDER.map(
+        stage => `${stage} ${byStage[stage] ?? 0}`
+      ).join(" · ");
     } catch (error: any) {
       results.leads = `ERRO — ${error.message}`;
     }

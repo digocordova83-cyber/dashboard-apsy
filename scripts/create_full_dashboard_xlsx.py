@@ -26,7 +26,7 @@ THEME = {
 }
 
 TABLE_DESCRIPTIONS = {
-    "CRM_Leads": "Base completa do EducaCRM persistida no Dashboard APSY. O funil é normalizado a partir de leads, atividade comercial, inscritos e matrículas; testes ficam em OUTROS.",
+    "CRM_Leads": "Base completa do EducaCRM persistida no Dashboard APSY. O funil usa a taxonomia oficial única; testes e atendimento em outro canal ficam em FORA_DA_BASE.",
     "Meta_Diario": "Dados diários de Meta Ads por campanha. Leads replicam a regra do dashboard, sem dupla contagem de ações de lead e sem tratar conversas de WhatsApp como leads.",
     "Meta_Campanhas": "Performance consolidada por campanha Meta no período de mídia informado.",
     "Meta_Conjuntos": "Performance consolidada por conjunto de anúncios Meta no período de mídia informado.",

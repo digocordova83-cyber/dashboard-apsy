@@ -39,8 +39,8 @@ def candidate_score(rec, course):
     context = norm(' '.join([rec.get('Products',''), rec.get('Oportunidade (nome)',''), rec.get('Oportunidade (tag)',''), rec.get('UTM campaign',''), rec.get('Formulário',''), rec.get('Contexto adicional','')]))
     score = 100 if any(token in context for token in course_tokens(course)) else 0
     stage = norm(rec.get('Oportunidade (etapa)','')).upper()
-    score += {'MATRICULADO':40, 'SQL':30, 'SAL':20, 'MQL':10}.get(stage, 0)
-    if stage and stage != 'OUTROS':
+    score += {'MATRICULADO':50, 'FECHAMENTO':40, 'QUALIFICADO':30, 'EM_ATENDIMENTO':20, 'NAO_LOCALIZADO':10}.get(stage, 0)
+    if stage and stage != 'FORA_DA_BASE':
         score += 5
     return score
 

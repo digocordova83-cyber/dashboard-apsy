@@ -23,7 +23,7 @@ Após cada execução, confirme que a resposta contém `ok: true`, período corr
 
 Confirme o total bruto, as oportunidades válidas e as cinco etapas. Verifique também o intervalo de datas, IDs distintos e hora de importação. Na comunicação com o negócio, use BRT.
 
-A regra de oportunidade válida é `opportunityStage` preenchida e diferente de `OUTROS`.
+A regra de lead considerado é `opportunityStage` pertencente à taxonomia oficial e diferente de `FORA_DA_BASE`. O funil principal usa Não Localizado, Em Atendimento, Qualificado, Fechamento e Matriculado. Recusa, Desqualificado e Encaminhado para Graduação são saídas/direcionamentos.
 
 ## Comportamento por fonte
 
@@ -67,7 +67,7 @@ Backups e auditorias podem conter nome, e-mail, telefone, CPF e endereço. Grave
 
 ## Mudanças e releases
 
-Toda mudança deve passar por pull request, CI verde e revisão. Alterações de schema exigem migração versionada. Mudanças nas regras MQL/SAL/SQL/MATRICULADO exigem atualização simultânea do código, dicionário de dados e validação de negócio.
+Toda mudança deve passar por pull request, CI verde e revisão. Alterações de schema exigem migração versionada. Mudanças na taxonomia oficial ou nas tabulações exigem atualização simultânea de `shared/crmFunnel.ts`, testes, dicionário de dados e validação de negócio.
 
 ## Referências
 

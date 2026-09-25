@@ -87,7 +87,7 @@ A carga só deve ser aceita quando:
 1. o número persistido é igual ao número normalizado;
 2. `externalId` é distinto em todos os registros;
 3. todas as IDs começam com `educacrm-lead:` ou `educacrm-inscrito:`;
-4. existe apenas um conjunto coerente de MQL, SAL, SQL, MATRICULADO e OUTROS;
+4. existe apenas um conjunto coerente das etapas oficiais definidas em `shared/crmFunnel.ts`;
 5. a primeira e a última data estão dentro do período esperado;
 6. o total do dia corrente ou D-1 bate com uma consulta independente à fonte;
 7. a contagem de matrículas é conciliada com `ingresso/inscritos/`.

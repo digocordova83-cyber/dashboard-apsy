@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fetchEducaCrmSnapshot, mapEducaCrmSnapshot } from "../server/educacrm";
 import { replaceCrmLeads } from "../server/db";
+import { isCountedCrmStage } from "../shared/crmFunnel";
 
 const HISTORY_START = "2026-05-01";
 const OUTPUT_DIR = path.resolve(process.env.AUDIT_OUTPUT_DIR ?? "artifacts");
@@ -16,26 +17,32 @@ function brtDate(now = new Date()) {
 }
 
 function asDate(value: string | Date) {
-  return value instanceof Date ? value : new Date(`${value.slice(0, 10)}T00:00:00.000Z`);
+  return value instanceof Date
+    ? value
+    : new Date(`${value.slice(0, 10)}T00:00:00.000Z`);
 }
 
 async function main() {
   const requestedCutoff = process.argv[2] ?? brtDate();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(requestedCutoff)) {
-    throw new Error("Uso: pnpm exec tsx scripts/sync_educacrm_to_db.ts [YYYY-MM-DD]");
+    throw new Error(
+      "Uso: pnpm exec tsx scripts/sync_educacrm_to_db.ts [YYYY-MM-DD]"
+    );
   }
 
   const snapshot = await fetchEducaCrmSnapshot(true);
-  const mapped = mapEducaCrmSnapshot(snapshot).filter((lead) => {
+  const mapped = mapEducaCrmSnapshot(snapshot).filter(lead => {
     const date = String(lead.createdDate).slice(0, 10);
     return date >= HISTORY_START && date <= requestedCutoff;
   });
 
   if (snapshot.leads.length < 100 || mapped.length < 100) {
-    throw new Error(`Carga recusada por segurança: ${snapshot.leads.length} leads brutos e ${mapped.length} normalizados`);
+    throw new Error(
+      `Carga recusada por segurança: ${snapshot.leads.length} leads brutos e ${mapped.length} normalizados`
+    );
   }
 
-  const rows = mapped.map((lead) => ({
+  const rows = mapped.map(lead => ({
     externalId: lead.externalId,
     companyName: lead.companyName,
     contactName: lead.contactName,
@@ -67,18 +74,26 @@ async function main() {
 
   const persisted = await replaceCrmLeads(rows);
   const byStage = Object.fromEntries(
-    Array.from(mapped.reduce((counts, lead) => {
-      const stage = lead.opportunityStage ?? "SEM_ETAPA";
-      counts.set(stage, (counts.get(stage) ?? 0) + 1);
-      return counts;
-    }, new Map<string, number>()).entries()).sort((a, b) => b[1] - a[1]),
+    Array.from(
+      mapped
+        .reduce((counts, lead) => {
+          const stage = lead.opportunityStage ?? "SEM_ETAPA";
+          counts.set(stage, (counts.get(stage) ?? 0) + 1);
+          return counts;
+        }, new Map<string, number>())
+        .entries()
+    ).sort((a, b) => b[1] - a[1])
   );
-  const valid = mapped.filter((lead) => lead.opportunityStage && lead.opportunityStage !== "OUTROS");
-  const dates = mapped.map((lead) => String(lead.createdDate).slice(0, 10)).sort();
+  const valid = mapped.filter(lead => isCountedCrmStage(lead.opportunityStage));
+  const dates = mapped
+    .map(lead => String(lead.createdDate).slice(0, 10))
+    .sort();
 
   const summary = {
     syncedAt: new Date().toISOString(),
-    syncedAtBrt: new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }),
+    syncedAtBrt: new Date().toLocaleString("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+    }),
     source: "EducaCRM API",
     cutoffBrt: requestedCutoff,
     raw: {
@@ -91,16 +106,22 @@ async function main() {
     byStage,
     dateFrom: dates[0] ?? null,
     dateTo: dates.at(-1) ?? null,
-    utmCoverage: mapped.filter((lead) => lead.utmSource || lead.utmMedium || lead.utmCampaign).length,
+    utmCoverage: mapped.filter(
+      lead => lead.utmSource || lead.utmMedium || lead.utmCampaign
+    ).length,
   };
 
   mkdirSync(OUTPUT_DIR, { recursive: true });
   const output = `${OUTPUT_DIR}/APSY_EducaCRM_Sync_${requestedCutoff.replaceAll("-", "")}.json`;
-  writeFileSync(output, `${JSON.stringify(summary, null, 2)}\n`, { mode: 0o600 });
+  writeFileSync(output, `${JSON.stringify(summary, null, 2)}\n`, {
+    mode: 0o600,
+  });
   console.log(JSON.stringify({ output, ...summary }, null, 2));
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+main()
+  .then(() => process.exit(0))
+  .catch(error => {
+    console.error(error);
+    process.exit(1);
+  });

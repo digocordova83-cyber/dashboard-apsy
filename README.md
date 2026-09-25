@@ -112,8 +112,8 @@ O GitHub Actions executa `test:ci`, typecheck e build em pushes e pull requests 
 
 ## Regras de negócio essenciais
 
-- **Oportunidade válida:** etapa preenchida e diferente de `OUTROS`.
-- **Funil normalizado:** MQL, SAL, SQL, MATRICULADO e OUTROS são derivados das entidades disponíveis no EducaCRM; consulte o [dicionário](docs/DATA_DICTIONARY.md).
+- **Lead considerado:** etapa reconhecida pela taxonomia oficial e diferente de `FORA_DA_BASE`.
+- **Funil único:** Não Localizado, Em Atendimento, Qualificado, Fechamento e Matriculado; Recusa, Desqualificado e Encaminhado para Graduação ficam como saídas/direcionamentos. Consulte o [dicionário](docs/DATA_DICTIONARY.md).
 - **Tempo:** persistência técnica em UTC quando aplicável; cortes, filtros e comunicação em `America/Sao_Paulo`.
 - **Mídia:** apenas as contas oficiais documentadas são consultadas.
 - **Programática:** ausência de entrega não é convertida em zero fictício nem misturada com Meta/Google.
@@ -130,6 +130,7 @@ O repositório deve permanecer **privado**. Ele não contém credenciais, export
 | [Runbook de migração](docs/MIGRATION_RUNBOOK.md) | Implantação, cutover, validação e rollback |
 | [Operação](docs/OPERATIONS.md) | Rotinas diárias, incidentes e manutenção |
 | [Dicionário de dados](docs/DATA_DICTIONARY.md) | Tabelas, etapas e critérios de normalização |
+| [Padrão de funil CRM](docs/CRM_FUNNEL_STANDARD.md) | Definição única, tabulações, aliases e regras de contagem |
 | [Variáveis de ambiente](docs/ENVIRONMENT.md) | Configuração sem exposição de secrets |
 | [Validação da migração](docs/MIGRATION_VALIDATION.md) | Baseline auditada e critérios de aceite |
 | [ADR EducaCRM](docs/adr/0001-educacrm-source-of-truth.md) | Decisão de substituir o Cirqua |

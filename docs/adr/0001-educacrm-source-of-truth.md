@@ -12,13 +12,19 @@ O Dashboard APSY consumia oportunidades do Cirqua. A operação passou a usar o 
 
 O EducaCRM passa a ser a única fonte produtiva do CRM no dashboard. O cliente Cirqua e suas credenciais foram removidos do fluxo ativo. O snapshot anterior foi preservado apenas como backup de rollback fora do Git.
 
-Como o EducaCRM não fornece MQL, SAL e SQL em um campo único, a aplicação normaliza o funil de forma determinística:
+Desde 25/09/2026, a aplicação usa uma definição única, acordada com o comercial, em todos os relatórios:
 
-- lead captado sem atividade: MQL;
-- contato com atividade Omni/HSM: SAL;
-- lead associado a inscrição: SQL;
-- inscrição ativa: MATRICULADO;
-- teste: OUTROS.
+- Não Localizado;
+- Em Atendimento;
+- Qualificado;
+- Fechamento;
+- Matriculado;
+- Recusa;
+- Desqualificado;
+- Encaminhado para Graduação;
+- Fora da Base.
+
+As tabulações oficiais são a primeira fonte de classificação. Enquanto o campo `situacao` não estiver preenchido no histórico da API, aliases documentados de tags, ações e etapas de inscrição preservam a série anterior. Registros sem qualquer sinal entram em Não Localizado. Testes e atendimentos realizados em outro canal ficam em Fora da Base e não entram nos indicadores.
 
 A sincronização é integral, D-1 em BRT no ciclo diário e transacional no banco.
 

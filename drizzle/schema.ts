@@ -150,7 +150,7 @@ export const crmLeads = mysqlTable("crm_leads", {
   opportunityName: varchar("opportunityName", { length: 255 }),
   /** Tag da oportunidade — motivo/situação (acionado, em_atendimento, recusa-financeira, matriculado...) */
   opportunityTag: varchar("opportunityTag", { length: 120 }),
-  /** Etapa do funil (MQL, SAL, SQL, MATRICULADO, OUTROS) — vazio = lead sem oportunidade */
+  /** Etapa canônica conforme shared/crmFunnel.ts; FORA_DA_BASE é excluída dos indicadores */
   opportunityStage: varchar("opportunityStage", { length: 40 }),
   createdDate: date("createdDate").notNull(),
   updatedDate: date("updatedDate"),
