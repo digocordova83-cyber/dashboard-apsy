@@ -7,7 +7,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
-import { serveStatic, setupVite } from "./vite";
+import { serveStatic } from "./static";
 import { syncDataHandler } from "../scheduledSync";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -49,7 +49,8 @@ async function startServer() {
   );
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
-    await setupVite(app, server);
+    const { setupDevelopmentServer } = await import("./dev");
+    await setupDevelopmentServer(app, server);
   } else {
     serveStatic(app);
   }

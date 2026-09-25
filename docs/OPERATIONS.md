@@ -41,6 +41,10 @@ A resposta pode conter campanhas sem métricas de entrega. Nesse caso, a operaç
 
 ## Incidentes
 
+### Container não inicia após o deploy
+
+Execute `pnpm validate`. Além de TypeScript, testes e build, o comando inicia `dist/index.js` com `NODE_ENV=production` e valida a resposta HTTP. O entrypoint de produção não pode importar Vite ou seus plugins; essas dependências ficam isoladas em `server/_core/dev.ts` e só são carregadas dinamicamente no ambiente de desenvolvimento.
+
 ### CRM retornou menos registros que o esperado
 
 Não force a carga removendo a barreira de segurança. Execute `pnpm crm:audit`, compare os counts dos endpoints e verifique paginação, token e disponibilidade da API.
